@@ -10,7 +10,6 @@ from time import time
 import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
-_LOGGER.setLevel(logging.DEBUG)
 
 STATE_STARTING = "starting"
 STATE_RUNNING = "running"
@@ -43,6 +42,7 @@ class SubscriptionManager:
         self._crc = crcmod.mkCrcFun(0x11021, rev=True, initCrc=0xffff, xorOut=0x0000)
         self._decoders = [decode_kaifa, ]
         self._default_decoder = self._decoders[0]
+        self._last_data_time = None
 
     def start(self):
         """Start websocket."""
@@ -68,13 +68,12 @@ class SubscriptionManager:
 
             self._state = STATE_RUNNING
             _LOGGER.debug("Running")
-            k = 0
+            self._last_data_time = time()
             while self._state == STATE_RUNNING:
                 try:
                     msg = await asyncio.wait_for(self.websocket.receive(), timeout=30)
                 except asyncio.TimeoutError:
-                    k += 1
-                    if k > 10:
+                    if (time() - self._last_data_time) > 2*60:
                         if self._show_connection_error:
                             _LOGGER.error("No data, reconnecting.")
                             self._show_connection_error = False
@@ -96,9 +95,8 @@ class SubscriptionManager:
                         return
                     continue
                 if msg.type in [aiohttp.WSMsgType.closed, aiohttp.WSMsgType.error]:
-                    print(msg, self._state)
                     return
-                k = 0
+                self._last_data_time = time()
                 self._is_running = True
                 await self._process_msg(msg)
                 self._show_connection_error = True
@@ -169,35 +167,48 @@ class SubscriptionManager:
 
     async def _process_msg(self, msg):
         """Process received msg."""
-        _LOGGER.debug("Recv, %s", msg)
-        data = msg.data
-        if data is None:
+        if msg.type != aiohttp.WSMsgType.BINARY:
             return
 
-        if msg.type == aiohttp.WSMsgType.BINARY:
-            if (len(data) < 9
-                    or not data[0] == FEND
-                    or not data[-1] == FEND):
-                _LOGGER.error("Invalid data %s", data)
-                return
-            data = data[1:-1]
-            crc = self._crc(data[:-2])
-            crc ^= 0xffff
-            if crc != struct.unpack("<H", data[-2:])[0]:
-                _LOGGER.error("Invalid crc %s %s", crc, struct.unpack("<H", data[-2:])[0])
+        decoded_data = self._decode(msg)
 
-            buf = ''.join('{:02x}'.format(x).upper() for x in data)
-            decoded_data = self._default_decoder(buf)
-            if decoded_data is None:
-                for decoder in self._decoders:
-                    decoded_data = decoder(buf)
-                    if decoded_data is not None:
-                        self._default_decoder = decoder
-                        break
-            print(decoded_data)
+        if decoded_data is None:
+            _LOGGER.error("Failed to decode data %s", msg)
+            return
 
         for callback in self.subscriptions:
             await callback(decoded_data)
+
+    def _decode(self, msg):
+        data = msg.data
+        if data is None:
+            return None
+
+        if (len(data) < 9
+                or not data[0] == FEND
+                or not data[-1] == FEND):
+            _LOGGER.error("Invalid data %s", data)
+            return None
+
+        data = data[1:-1]
+        crc = self._crc(data[:-2])
+        crc ^= 0xffff
+        if crc != struct.unpack("<H", data[-2:])[0]:
+            _LOGGER.error("Invalid crc %s %s", crc, struct.unpack("<H", data[-2:])[0])
+            return None
+
+        buf = ''.join('{:02x}'.format(x).upper() for x in data)
+        decoded_data = self._default_decoder(buf)
+        if decoded_data is not None:
+            return decoded_data
+
+        for decoder in self._decoders:
+            decoded_data = decoder(buf)
+            if decoded_data is not None:
+                self._default_decoder = decoder
+                return decoded_data
+
+        return None
 
     def _cancel_retry_timer(self):
         if self._retry_timer is None:
@@ -263,6 +274,7 @@ def decode_kaifa(buf):
                 res['Cumulative_hourly_reactive_import_energy'] = int(txt_buf[2:10], 16)
                 txt_buf = txt_buf[10:]
                 res['Cumulative_hourly_reactive_export_energy'] = int(txt_buf[2:10], 16)
+                print(res)
         else:
             _LOGGER.warning("Unknown type %s", pkt_type)
             return None
@@ -274,12 +286,15 @@ def decode_kaifa(buf):
 
 if __name__ == '__main__':
     async def _main():
+        _LOGGER.debug("Starting...")
         session = aiohttp.ClientSession()
         url = "ws://{}:{}".format(HOST, PORT)
         sub_manager = SubscriptionManager(loop, session, url)
         sub_manager.start()
         while True:
             await asyncio.sleep(3600)
+
+    logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_main())
 
