@@ -40,7 +40,7 @@ class SubscriptionManager:
         self._show_connection_error = True
         self._is_running = False
         self._crc = crcmod.mkCrcFun(0x11021, rev=True, initCrc=0xffff, xorOut=0x0000)
-        self._decoders = [decode_kaifa, decode_aidon]
+        self._decoders = [decode_kaifa, decode_kamstrup, decode_aidon]
         self._default_decoder = self._decoders[0]
         self._last_data_time = None
 
@@ -277,7 +277,6 @@ def decode_kaifa(buf, log=False):
                 res['Cumulative_hourly_reactive_import_energy'] = int(txt_buf[2:10], 16)
                 txt_buf = txt_buf[10:]
                 res['Cumulative_hourly_reactive_export_energy'] = int(txt_buf[2:10], 16)
-                print(res)
         else:
             if log:
                 _LOGGER.warning("Unknown type %s", pkt_type)
@@ -289,10 +288,7 @@ def decode_kaifa(buf, log=False):
     return res
 
 
-def decode_aidon(buf, log=True):
-    print(buf)
-    print("----aaa")
-    print("----aaabbb")
+def decode_aidon(buf, log=False):
     buf = buf[32:]
     try:
         res = {}
@@ -307,6 +303,41 @@ def decode_aidon(buf, log=True):
             if log:
                 _LOGGER.warning("Unknown type %s", pkt_type)
             return None
+    except ValueError:
+        if log:
+            _LOGGER.error("Failed", exc_info=True)
+        return None
+    return res
+
+
+def decode_kamstrup(buf, log=True):
+    if buf[8:10] != '13':
+        if log:
+            _LOGGER.error("Unknown control field %s", buf[10:12])
+        return None
+    buf = buf[32:]
+    try:
+        txt_buf = buf[26:]
+
+        pkt_type = txt_buf[0:2]
+        if pkt_type not in ['0F', '11', '1B', '17', '21', '19', '23']:
+            if log:
+                _LOGGER.warning("Unknown type %s", pkt_type)
+            return None
+
+        year = int(buf[0:4], 16)
+        month = int(buf[4:6], 16)
+        day = int(buf[6:8], 16)
+        hour = int(buf[10:12], 16)
+        minute = int(buf[12:14], 16)
+        second = int(buf[14:16], 16)
+        date = "%02d%02d%02d_%02d%02d%02d" % (second, minute, hour, day, month, year)
+
+        res = {}
+        res['time_stamp'] = datetime.strptime(date, '%S%M%H_%d%m%Y')
+
+        res['Effect'] = int(txt_buf[160:168], 16)
+
     except ValueError:
         if log:
             _LOGGER.error("Failed", exc_info=True)
