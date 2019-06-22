@@ -1,0 +1,8 @@
+sudo: false
+language: python
+python:
+  - "3.5"
+cache: pip
+script:
+- flake8 han_solo --max-line-length=120
+- pylint han_solo --max-line-length=120
