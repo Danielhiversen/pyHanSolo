@@ -40,7 +40,7 @@ class SubscriptionManager:
         self._show_connection_error = True
         self._is_running = False
         self._crc = crcmod.mkCrcFun(0x11021, rev=True, initCrc=0xffff, xorOut=0x0000)
-        self._decoders = [decode_kaifa, ]
+        self._decoders = [decode_kaifa, decode_aidon]
         self._default_decoder = self._decoders[0]
         self._last_data_time = None
 
@@ -170,7 +170,7 @@ class SubscriptionManager:
         if msg.type != aiohttp.WSMsgType.BINARY:
             return
 
-        decoded_data = self._decode(msg)
+        decoded_data = self.decode(msg)
 
         if decoded_data is None:
             _LOGGER.error("Failed to decode data %s", msg)
@@ -179,7 +179,7 @@ class SubscriptionManager:
         for callback in self.subscriptions:
             await callback(decoded_data)
 
-    def _decode(self, msg):
+    def decode(self, msg):
         data = msg.data
         if data is None:
             return None
@@ -227,18 +227,21 @@ class SubscriptionManager:
             self._client_task = None
 
 
-def decode_kaifa(buf):
+def decode_kaifa(buf, log=False):
     if buf[10:12] != '10':
-        _LOGGER.error("Unknown control field %s", buf[10:12])
+        if log:
+            _LOGGER.error("Unknown control field %s", buf[10:12])
         return None
     if int(buf[2:4], 16)*2 != len(buf):
-        _LOGGER.error("Invalid length %s, %s", int(buf[2:4], 16)*2, len(buf))
+        if log:
+            _LOGGER.error("Invalid length %s, %s", int(buf[2:4], 16)*2, len(buf))
         return None
     buf = buf[32:]
     try:
         txt_buf = buf[28:]
         if txt_buf[:2] != '02':
-            _LOGGER.error("Unknown data %s", buf[0])
+            if log:
+                _LOGGER.error("Unknown data %s", buf[0])
             return None
 
         year = int(buf[4:8], 16)
@@ -256,7 +259,7 @@ def decode_kaifa(buf):
         txt_buf = txt_buf[4:]
         if pkt_type == '01':
             res['Effect'] = int(txt_buf[2:10], 16)
-        elif pkt_type in ['09', '0E']:
+        elif pkt_type in ['09', '0D', '12', '0E']:
             res['Version identifier'] = base64.b16decode(txt_buf[4:18]).decode("utf-8")
             txt_buf = txt_buf[18:]
             res['Meter-ID'] = base64.b16decode(txt_buf[4:36]).decode("utf-8")
@@ -264,7 +267,7 @@ def decode_kaifa(buf):
             res['Meter type'] = base64.b16decode(txt_buf[4:20]).decode("utf-8")
             txt_buf = txt_buf[20:]
             res['Effect'] = int(txt_buf[2:10], 16)
-            if pkt_type == '0E':
+            if pkt_type in ['12', '0E']:
                 txt_buf = txt_buf[10:]
                 txt_buf = txt_buf[78:]
                 res['Cumulative_hourly_active_import_energy'] = int(txt_buf[2:10], 16)
@@ -276,10 +279,37 @@ def decode_kaifa(buf):
                 res['Cumulative_hourly_reactive_export_energy'] = int(txt_buf[2:10], 16)
                 print(res)
         else:
-            _LOGGER.warning("Unknown type %s", pkt_type)
+            if log:
+                _LOGGER.warning("Unknown type %s", pkt_type)
             return None
     except ValueError:
-        _LOGGER.error("Failed", exc_info=True)
+        if log:
+            _LOGGER.error("Failed", exc_info=True)
+        return None
+    return res
+
+
+def decode_aidon(buf, log=True):
+    print(buf)
+    print("----aaa")
+    print("----aaabbb")
+    buf = buf[32:]
+    try:
+        res = {}
+        res['time_stamp'] = None
+
+        pkt_type = buf[4:6]
+        if pkt_type == '01':
+            res['Effect'] = int(buf[28:36], 16)
+        elif pkt_type in ['09', '0C', '0D', '0E', '11', '12']:
+            res['Effect'] = int(buf[162:170], 16)
+        else:
+            if log:
+                _LOGGER.warning("Unknown type %s", pkt_type)
+            return None
+    except ValueError:
+        if log:
+            _LOGGER.error("Failed", exc_info=True)
         return None
     return res
 
