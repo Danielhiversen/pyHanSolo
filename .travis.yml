@@ -4,7 +4,7 @@ python:
   - "3.5"
 cache: pip
 install:
-- pip install flake8 pylint
+- pip install flake8 pylint crcmod aiohttp
 script:
 - flake8 han_solo --max-line-length=120
 - pylint han_solo --max-line-length=120

@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name = 'pyHanSolo',
     packages = ['han_tibber'],
-    install_requires=[],
+    install_requires=['crcmod', 'aiohttp'],
     version='0.1.0',
     description='A python3 library to communicate with HanSolo',
     python_requires='>=3.5.3',

@@ -1,13 +1,13 @@
 """Subscription manager for Tibber Han Solo."""
 import asyncio
 import base64
-import crcmod
 import logging
 import struct
 from datetime import datetime
 from time import time
 
 import aiohttp
+import crcmod
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,8 +23,6 @@ FEND = 126  # 7e
 
 class SubscriptionManager:
     """Subscription manager."""
-
-    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, loop, session, url):
         """Create resources for websocket communication."""
@@ -73,7 +71,7 @@ class SubscriptionManager:
                 try:
                     msg = await asyncio.wait_for(self.websocket.receive(), timeout=30)
                 except asyncio.TimeoutError:
-                    if (time() - self._last_data_time) > 2*60:
+                    if (time() - self._last_data_time) > 2 * 60:
                         if self._show_connection_error:
                             _LOGGER.error("No data, reconnecting.")
                             self._show_connection_error = False
@@ -180,6 +178,7 @@ class SubscriptionManager:
             await callback(decoded_data)
 
     def decode(self, msg):
+        """Decode received msg."""
         data = msg.data
         if data is None:
             return None
@@ -198,7 +197,7 @@ class SubscriptionManager:
             return None
 
         buf = ''.join('{:02x}'.format(x).upper() for x in data)
-        decoded_data = self._default_decoder(buf)
+        decoded_data = self._default_decoder(buf, log=True)
         if decoded_data is not None:
             return decoded_data
 
@@ -228,13 +227,14 @@ class SubscriptionManager:
 
 
 def decode_kaifa(buf, log=False):
+    """Decode kaifa."""
     if buf[10:12] != '10':
         if log:
             _LOGGER.error("Unknown control field %s", buf[10:12])
         return None
-    if int(buf[2:4], 16)*2 != len(buf):
+    if int(buf[2:4], 16) * 2 != len(buf):
         if log:
-            _LOGGER.error("Invalid length %s, %s", int(buf[2:4], 16)*2, len(buf))
+            _LOGGER.error("Invalid length %s, %s", int(buf[2:4], 16) * 2, len(buf))
         return None
     buf = buf[32:]
     try:
@@ -289,6 +289,7 @@ def decode_kaifa(buf, log=False):
 
 
 def decode_aidon(buf, log=False):
+    """Decode Aidon."""
     buf = buf[32:]
     try:
         res = {}
@@ -311,6 +312,7 @@ def decode_aidon(buf, log=False):
 
 
 def decode_kamstrup(buf, log=True):
+    """Decode Kamstrup."""
     if buf[8:10] != '13':
         if log:
             _LOGGER.error("Unknown control field %s", buf[10:12])
@@ -355,8 +357,7 @@ if __name__ == '__main__':
         while True:
             await asyncio.sleep(3600)
 
+
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_main())
-
-
