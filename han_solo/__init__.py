@@ -24,7 +24,7 @@ FEND = 126  # 7e
 class SubscriptionManager:
     """Subscription manager."""
 
-    # pylint: disable=too-many-instance-attributes, too-many-branches
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, loop, session, url):
         """Create resources for websocket communication."""
@@ -179,7 +179,7 @@ class SubscriptionManager:
         for callback in self.subscriptions:
             await callback(decoded_data)
 
-    def decode(self, msg):
+    def decode(self, msg, check_time=True):
         """Decode received msg."""
         data = msg.data
         if data is None:
@@ -200,15 +200,16 @@ class SubscriptionManager:
 
         buf = ''.join('{:02x}'.format(x).upper() for x in data)
         decoded_data = self._default_decoder(buf, log=True)
-        if decoded_data is not None:
+        if decoded_data is not None and (not check_time or valid_time(decoded_data.get('time_stamp'))):
             return decoded_data
 
         for decoder in self._decoders:
             decoded_data = decoder(buf)
-            if decoded_data is not None:
+            if decoded_data is not None and (not check_time or valid_time(decoded_data.get('time_stamp'))):
                 self._default_decoder = decoder
                 return decoded_data
 
+        _LOGGER.error("Unknown data %s", data)
         return None
 
     def _cancel_retry_timer(self):
@@ -228,18 +229,29 @@ class SubscriptionManager:
             self._client_task = None
 
 
+def valid_time(time_stamp):
+    """Validate time stamp."""
+    if time_stamp is None:
+        return True
+    if not isinstance(time_stamp, datetime):
+        return False
+    return abs((time_stamp - datetime.now()).total_seconds()) < 3600 * 3
+
+
 def decode_kaifa(buf, log=False):
     """Decode kaifa."""
+    # pylint: disable=too-many-instance-attributes, too-many-branches
     if buf[10:12] != '10':
         if log:
             _LOGGER.error("Unknown control field %s", buf[10:12])
         return None
-    if int(buf[2:4], 16) * 2 != len(buf):
-        if log:
-            _LOGGER.error("Invalid length %s, %s", int(buf[2:4], 16) * 2, len(buf))
-        return None
-    buf = buf[32:]
     try:
+        if int(buf[1:4], 16) * 2 != len(buf):
+            if log:
+                _LOGGER.error("Invalid length %s, %s", int(buf[1:4], 16) * 2, len(buf))
+            return None
+
+        buf = buf[32:]
         txt_buf = buf[28:]
         if txt_buf[:2] != '02':
             if log:
@@ -292,16 +304,24 @@ def decode_kaifa(buf, log=False):
 
 def decode_aidon(buf, log=False):
     """Decode Aidon."""
-    buf = buf[32:]
+    if buf[10:12] != '13':
+        if log:
+            _LOGGER.error("Unknown control field %s", buf[10:12])
+        return None
+
     try:
+        if int(buf[1:4], 16) * 2 != len(buf):
+            if log:
+                _LOGGER.error("Invalid length %s, %s", int(buf[1:4], 16) * 2, len(buf))
+            return None
+
         res = {}
         res['time_stamp'] = None
-
-        pkt_type = buf[4:6]
+        pkt_type = buf[36:38]
         if pkt_type == '01':
-            res['Effect'] = int(buf[28:36], 16)
+            res['Effect'] = int(buf[60:68], 16)
         elif pkt_type in ['09', '0C', '0D', '0E', '11', '12']:
-            res['Effect'] = int(buf[162:170], 16)
+            res['Effect'] = int(buf[194:202], 16)
         else:
             if log:
                 _LOGGER.warning("Unknown type %s", pkt_type)
@@ -319,16 +339,20 @@ def decode_kamstrup(buf, log=True):
         if log:
             _LOGGER.error("Unknown control field %s", buf[10:12])
         return None
+    if len(buf) < 176:
+        if log:
+            _LOGGER.error("Data length %s", len(buf))
+        return None
     buf = buf[32:]
+    txt_buf = buf[26:]
+
+    pkt_type = txt_buf[0:2]
+    if pkt_type not in ['0F', '11', '1B', '17', '21', '19', '23']:
+        if log:
+            _LOGGER.warning("Unknown type %s", pkt_type)
+        return None
+
     try:
-        txt_buf = buf[26:]
-
-        pkt_type = txt_buf[0:2]
-        if pkt_type not in ['0F', '11', '1B', '17', '21', '19', '23']:
-            if log:
-                _LOGGER.warning("Unknown type %s", pkt_type)
-            return None
-
         year = int(buf[0:4], 16)
         month = int(buf[4:6], 16)
         day = int(buf[6:8], 16)
@@ -339,9 +363,7 @@ def decode_kamstrup(buf, log=True):
 
         res = {}
         res['time_stamp'] = datetime.strptime(date, '%S%M%H_%d%m%Y')
-
         res['Effect'] = int(txt_buf[160:168], 16)
-
     except ValueError:
         if log:
             _LOGGER.error("Failed", exc_info=True)
