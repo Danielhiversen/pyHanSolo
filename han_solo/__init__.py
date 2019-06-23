@@ -333,7 +333,7 @@ def decode_aidon(buf, log=False):
     return res
 
 
-def decode_kamstrup(buf, log=True):
+def decode_kamstrup(buf, log=False):
     """Decode Kamstrup."""
     if buf[8:10] != '13':
         if log:
