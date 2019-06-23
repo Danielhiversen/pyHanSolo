@@ -24,6 +24,8 @@ FEND = 126  # 7e
 class SubscriptionManager:
     """Subscription manager."""
 
+    # pylint: disable=too-many-instance-attributes, too-many-branches
+
     def __init__(self, loop, session, url):
         """Create resources for websocket communication."""
         self.loop = loop
@@ -346,7 +348,6 @@ def decode_kamstrup(buf, log=True):
         return None
     return res
 
-
 if __name__ == '__main__':
     async def _main():
         _LOGGER.debug("Starting...")
@@ -359,5 +360,5 @@ if __name__ == '__main__':
 
 
     logging.basicConfig(level=logging.DEBUG)
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_main())
+    _loop = asyncio.get_event_loop()
+    _loop.run_until_complete(_main())
