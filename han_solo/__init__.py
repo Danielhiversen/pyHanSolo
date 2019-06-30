@@ -369,4 +369,3 @@ def decode_kamstrup(buf, log=False):
             _LOGGER.error("Failed", exc_info=True)
         return None
     return res
-
