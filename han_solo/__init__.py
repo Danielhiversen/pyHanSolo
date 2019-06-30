@@ -370,18 +370,3 @@ def decode_kamstrup(buf, log=False):
         return None
     return res
 
-
-if __name__ == '__main__':
-    async def _main(__loop):
-        _LOGGER.debug("Starting...")
-        _session = aiohttp.ClientSession()
-        _url = "ws://{}:{}".format(HOST, PORT)
-        sub_manager = SubscriptionManager(__loop, _session, _url)
-        sub_manager.start()
-        while True:
-            await asyncio.sleep(3600)
-
-
-    logging.basicConfig(level=logging.DEBUG)
-    _loop = asyncio.get_event_loop()
-    _loop.run_until_complete(_main(_loop))
