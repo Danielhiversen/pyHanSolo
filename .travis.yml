@@ -1,10 +1,17 @@
 sudo: false
 language: python
 python:
-  - "3.5"
+- '3.5'
 cache: pip
 install:
 - pip install flake8 pylint crcmod aiohttp
 script:
 - flake8 han_solo --max-line-length=120
 - pylint han_solo --max-line-length=120
+deploy:
+  password:
+    secure: 2UYslyfT95MwGMpyXPW+mumUbQoQsBX9c9Izof72aYDV+UmA3Lpwqa+ctykWQHc3+EOwV19KaHeUFqddadmkyAR89ub7myRnU4Gcgp48a97zM08c9uMT+35qbD81aXmcPcRZTEahSHHZ+qomqGyuOUKPNUoaq+teLYdajW3/8MYl4GIrRtSF7udAvvUjq4ljRdNSpgTIQhChyMMtWd4LjOJ66xqSc/FxJWz4im1B+4MPBazl/oR9bl5U/Ej5xqN1BjDNQmBN0ye1G1w/StKM36biGEiB+ukOgJzAdag1oe8N/FGxwMFVmCsCd4+It1d2jjJIiWO/qyQepgr0dlUWHmkiegQnkGmB9TCUV4mc9UdsQm5Cf6Neu6IvrRQ8eCqefAaDSvDP+BxiHHJZUz8ET5EDLVBslZ9+5zsbqQn7Hdgj3pXYY3Bwb4j40OOwPKEAfNP6CjGfRa8pZV6mxcDhdEzpjb2DP9MO+w2pS7FrTsog/4TGo4uw0E8eHFssBWIEn1d7srSfA1OYWlReBYQnIkhKzN/KrHMS0PIpQ29/+Q7ijSLisDU9CJebqU5v7q+AW4D/MVfDg6DORPVbAeVaryR9GW4Rb+vTL65HhucrqT6RKgjxLlVrceowwGb0Kv4bID+Um5ONAn73jGzTSP1cixHpZaspVwKM3YEPCr9BksY=
+  on:
+    tags: true
+    repo: Danielhiversen/pyHanSolo
+    branch: master
