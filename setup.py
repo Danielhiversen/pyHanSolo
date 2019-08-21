@@ -1,8 +1,8 @@
 from setuptools import setup
 
 setup(
-    name = 'pyHanSolo',
-    packages = ['han_tibber'],
+    name='pyHanSolo',
+    packages=['han_solo'],
     install_requires=['crcmod', 'aiohttp'],
     version='0.1.0',
     description='A python3 library to communicate with HanSolo',
